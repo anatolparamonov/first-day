@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Учебный кабинет новичка команды «Север»: три памятки, квиз по регламенту, прогресс и локальное сохранение.">
+<title>Первый день в команде — учебный кабинет · Команда «Север»</title>
+<!--
+  ══════════════════════════════════════════════════════════════════════════
+  Паспорт мини-приложения «Первый день в команде»
+  ──────────────────────────────────────────────────────────────────────────
+  Заказчик:            вымышленная команда «Север» (учебные данные)
+  Пользователь:        наставник нового сотрудника — выдаёт кабинет новичку
+                       и по нему ведёт первый рабочий день
+  Формат:              один самодостаточный HTML-файл, работает офлайн
+                       в одном браузере, без сервера и внешних библиотек
+  Результат для
+  пользователя:        новичок читает три памятки (S1 «Рабочий день»,
+                       S2 «Файлы», S3 «Вопросы»), отмечает изученное —
+                       прогресс 0/3…3/3; после трёх отметок открывается квиз
+                       из 3 вопросов; итог — число верных ответов из 3
+                       с пояснениями из памяток; порог завершения — 3/3,
+                       повтор разрешён; отметки и последний итог сохраняются
+                       локально (localStorage), сброс — только по подтверждению
+  Правила:             отметки независимые; до 3/3 квиз недоступен;
+                       обновление страницы восстанавливает состояние
+  ══════════════════════════════════════════════════════════════════════════
+-->
+<style>
+  :root {
+    --ink: #16283d;
+    --ink-2: #31435a;
+    --muted: #5a6b80;
+    --muted-2: #8496ac;
+    --line: #d9e3f0;
+    --line-soft: #e1e9f4;
+    --bg: #eef3fa;
+    --card: #ffffff;
+    --primary: #2456a6;
+    --primary-dark: #1d488c;
+    --primary-soft: #e3ecfb;
+    --primary-border: #cddcf6;
+    --good: #178a50;
+    --good-soft: #e2f5ea;
+    --good-border: #bfe4cf;
+    --bad: #b3382c;
+    --bad-soft: #fdf3f2;
+    --bad-border: #eecac6;
+    --warn: #8a5a00;
+    --warn-soft: #fdf1d9;
+    --warn-border: #f0d9a6;
+    --radius: 16px;
+    --shadow: 0 1px 2px rgba(22,40,61,.04), 0 10px 30px rgba(22,40,61,.06);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background:
+      radial-gradient(1100px 420px at 50% -120px, #dbe8fa 0%, rgba(219,232,250,0) 70%),
+      var(--bg);
+    color: var(--ink);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 880px; margin: 0 auto; padding: 24px 20px 44px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+  }
+
+  :focus-visible { outline: 3px solid #7ea6e8; outline-offset: 2px; border-radius: 6px; }
+
+  /* ── Шапка ─────────────────────────────────────────────── */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+    padding: 20px 24px; margin-bottom: 18px;
+    border: none; color: #fff;
+    background: linear-gradient(115deg, #173a74 0%, #2456a6 52%, #0e7f95 100%);
+    box-shadow: 0 12px 30px rgba(23,58,116,.25);
+  }
+  .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .logo {
+    width: 48px; height: 48px; border-radius: 14px; flex: none;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.16); border: 1px solid rgba(255,255,255,.35);
+    font-weight: 800; font-size: 22px;
+  }
+  .brand-text h1 { margin: 0; font-size: 22px; line-height: 1.25; }
+  .brand-text p { margin: 2px 0 0; font-size: 13.5px; color: rgba(255,255,255,.78); }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3);
+    font-size: 13px; font-weight: 700;
+  }
+  .chip svg { width: 14px; height: 14px; }
+  .chip.ok { background: rgba(52,199,123,.28); border-color: rgba(130,232,183,.6); }
+
+  /* ── Заголовки шагов ───────────────────────────────────── */
+  .sec-head { margin: 28px 0 12px; }
+  .kicker {
+    display: inline-block; font-size: 11.5px; font-weight: 800;
+    letter-spacing: .09em; text-transform: uppercase;
+    color: var(--primary); background: var(--primary-soft);
+    border: 1px solid var(--primary-border);
+    padding: 3px 10px; border-radius: 999px;
+  }
+  .sec-head h2 { margin: 9px 0 4px; font-size: 20px; }
+  .sec-sub { margin: 0; color: var(--muted); font-size: 14px; }
+
+  /* ── Панель прогресса ──────────────────────────────────── */
+  .panel { padding: 18px 20px; }
+  .panel:focus { outline: none; }
+  .progress-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .progress-head h2 { margin: 0; font-size: 16px; }
+  .progress-count { font-size: 13.5px; font-weight: 700; color: var(--primary); }
+  .bar { margin-top: 12px; height: 10px; border-radius: 999px; background: #e3ebf6; overflow: hidden; }
+  .bar i {
+    display: block; height: 100%; width: 0; border-radius: 999px;
+    background: linear-gradient(90deg, var(--primary), #12a5b8);
+    transition: width .35s ease;
+  }
+  .bar.full i { background: linear-gradient(90deg, #178a50, #3ec27f); }
+  .progress-hint { margin: 10px 0 0; font-size: 13.5px; color: var(--muted); }
+
+  /* ── Памятки ───────────────────────────────────────────── */
+  .memo-list { display: flex; flex-direction: column; gap: 12px; }
+  .memo { padding: 16px 18px; transition: border-color .2s, background .2s; }
+  .memo-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .sbadge {
+    flex: none; width: 40px; height: 40px; border-radius: 12px;
+    display: grid; place-items: center; font-weight: 800; font-size: 14px;
+    color: var(--primary); background: var(--primary-soft); border: 1px solid var(--primary-border);
+    transition: .2s;
+  }
+  .memo-head h3 { margin: 0; font-size: 16.5px; }
+  .mark {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 9px;
+    font-size: 14px; font-weight: 700; color: var(--muted); cursor: pointer;
+    user-select: none; padding: 7px 12px; border-radius: 10px;
+    border: 1.5px solid var(--line); background: #fff; transition: .2s;
+  }
+  .mark:hover { border-color: var(--primary); }
+  .mark input { width: 18px; height: 18px; accent-color: var(--good); margin: 0; cursor: pointer; flex: none; }
+  .memo-body { margin: 12px 0 0; padding-top: 12px; border-top: 1px dashed var(--line-soft); color: var(--ink-2); font-size: 14.5px; }
+  .memo-body p { margin: 0; }
+  .memo-body strong { color: var(--ink); }
+  .memo.done { border-color: var(--good-border); background: #f5fcf8; }
+  .memo.done .sbadge { color: var(--good); background: var(--good-soft); border-color: var(--good-border); }
+  .memo.done .mark { color: var(--good); border-color: #9fd8ba; background: #eaf8f0; }
+
+  /* ── Квиз ──────────────────────────────────────────────── */
+  .quiz-card { padding: 20px; }
+  .quiz-locked {
+    text-align: center; padding: 26px 16px;
+    border: 1.5px dashed #c6d4e8; border-radius: 12px; background: #f6f9fd;
+  }
+  .lock-ic {
+    display: inline-grid; place-items: center; width: 46px; height: 46px;
+    border-radius: 50%; background: var(--primary-soft); color: var(--primary); margin-bottom: 8px;
+  }
+  .lock-ic svg { width: 22px; height: 22px; }
+  .quiz-locked h3 { margin: 0 0 6px; font-size: 16.5px; }
+  .quiz-locked p { margin: 0; color: var(--muted); font-size: 14px; }
+  .lock-note {
+    display: inline-block; margin-top: 12px; font-size: 12.5px; font-weight: 700;
+    color: var(--primary); background: var(--primary-soft);
+    padding: 4px 10px; border-radius: 999px;
+  }
+
+  fieldset.q { border: 0; margin: 0 0 18px; padding: 0; }
+  fieldset.q legend { padding: 0; margin: 0 0 10px; font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .qnum {
+    flex: none; width: 22px; height: 22px; border-radius: 7px;
+    background: var(--primary-soft); color: var(--primary);
+    font-size: 12.5px; font-weight: 800; display: grid; place-items: center;
+  }
+  .opts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .opt {
+    display: flex; align-items: center; gap: 10px;
+    border: 1.5px solid var(--line); border-radius: 12px; padding: 11px 13px;
+    cursor: pointer; font-size: 14.5px; font-weight: 600; color: var(--ink-2);
+    background: #fff; transition: .15s;
+  }
+  .opt:hover { border-color: #9db8e4; }
+  .opt.picked { border-color: var(--primary); background: #eef4fd; color: #173a74; box-shadow: inset 0 0 0 1px var(--primary); }
+  .opt input { width: 17px; height: 17px; accent-color: var(--primary); margin: 0; cursor: pointer; flex: none; }
+  .quiz-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 4px; }
+  .quiz-hint { font-size: 13px; color: var(--muted); }
+  .quiz-note { margin: 14px 0 0; font-size: 13px; color: var(--muted); border-top: 1px dashed var(--line-soft); padding-top: 12px; }
+
+  /* ── Кнопки ────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    border-radius: 12px; padding: 11px 18px;
+    font-size: 14.5px; font-weight: 700; font-family: inherit;
+    cursor: pointer; border: 1.5px solid transparent; transition: .15s;
+  }
+  .btn svg { width: 16px; height: 16px; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--primary-dark); }
+  .btn-primary:disabled { background: #a9bdd9; cursor: not-allowed; }
+  .btn-ghost { background: #fff; color: var(--ink-2); border-color: var(--line); }
+  .btn-ghost:hover { border-color: #9db8e4; }
+  .btn-danger { background: #fff; color: var(--bad); border-color: var(--bad-border); }
+  .btn-danger:hover { border-color: var(--bad); background: var(--bad-soft); }
+  .btn-danger-solid { background: var(--bad); color: #fff; }
+  .btn-danger-solid:hover { background: #96281d; }
+
+  /* ── Результат ─────────────────────────────────────────── */
+  .result-card { padding: 20px; }
+  .result-top { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; padding-bottom: 16px; border-bottom: 1px solid #e6edf7; }
+  .score { font-size: 46px; font-weight: 800; line-height: 1; min-width: 108px; }
+  .score .den { font-size: 26px; color: var(--muted-2); font-weight: 700; }
+  .score.good { color: var(--good); }
+  .verdict h3 { margin: 0 0 4px; font-size: 17px; }
+  .verdict p { margin: 0; font-size: 14px; color: var(--muted); max-width: 58ch; }
+  .badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 800; padding: 4px 11px;
+    border-radius: 999px; margin-bottom: 8px;
+  }
+  .badge svg { width: 13px; height: 13px; }
+  .badge-done { color: #147a4d; background: var(--good-soft); border: 1px solid var(--good-border); }
+  .badge-retry { color: var(--warn); background: var(--warn-soft); border: 1px solid var(--warn-border); }
+  .answers { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+  .answer { display: flex; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid #e2eaf5; background: #fafcfe; }
+  .answer.ok { border-color: #cdebd9; background: #f5fcf8; }
+  .answer.no { border-color: #f2d4d0; background: #fdf6f5; }
+  .a-icon { flex: none; margin-top: 2px; }
+  .a-icon svg { width: 20px; height: 20px; }
+  .answer.ok .a-icon { color: var(--good); }
+  .answer.no .a-icon { color: var(--bad); }
+  .answer p { margin: 0; font-size: 14px; }
+  .answer .a-q { font-weight: 700; color: var(--ink); }
+  .answer .a-given { color: var(--ink-2); margin-top: 2px; }
+  .answer .a-expl { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+  .result-actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e6edf7; }
+  .result-meta { font-size: 13px; color: var(--muted); }
+
+  /* ── Сброс и подвал ────────────────────────────────────── */
+  .danger-card { margin-top: 28px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .danger-card h3 { margin: 0 0 3px; font-size: 15px; }
+  .danger-card p { margin: 0; font-size: 13.5px; color: var(--muted); max-width: 62ch; }
+  .foot { text-align: center; color: #7c8ba0; font-size: 12.5px; margin-top: 24px; }
+
+  .noscript-box { margin: 18px 0; padding: 14px 18px; border: 1.5px solid var(--warn-border); background: var(--warn-soft); color: var(--warn); border-radius: 12px; font-weight: 600; }
+
+  /* ── Модальное окно сброса ─────────────────────────────── */
+  .modal { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 20px; }
+  .modal[hidden] { display: none; }
+  .modal-backdrop { position: absolute; inset: 0; background: rgba(13,27,44,.55); backdrop-filter: blur(2px); }
+  .modal-card {
+    position: relative; width: 100%; max-width: 430px;
+    background: #fff; border-radius: var(--radius); padding: 22px;
+    box-shadow: 0 24px 60px rgba(13,27,44,.35);
+  }
+  .modal-card h3 { margin: 0 0 8px; font-size: 17px; }
+  .modal-card p { margin: 0 0 18px; font-size: 14px; color: var(--ink-2); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+
+  @media (max-width: 640px) {
+    .opts { grid-template-columns: 1fr; }
+    .topbar { padding: 18px; }
+    .brand-text h1 { font-size: 19px; }
+    .score { min-width: 0; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">С</div>
+      <div class="brand-text">
+        <h1>Первый день в команде</h1>
+        <p>Учебный кабинет новичка · команда «Север»</p>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="chip" id="chipProgress">Прогресс: 0/3</span>
+      <span class="chip ok" id="chipDone" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4 10-11"/></svg>
+        Регламент усвоен
+      </span>
+    </div>
+  </header>
+
+  <noscript><div class="noscript-box">Для работы кабинета включите JavaScript — без него отметки, квиз и сохранение не работают.</div></noscript>
+
+  <section class="card panel" id="progressPanel" tabindex="-1" aria-label="Прогресс">
+    <div class="progress-head">
+      <h2>Ваш прогресс</h2>
+      <span class="progress-count" id="progressText">Отмечено памяток: 0 из 3</span>
+    </div>
+    <div class="bar" id="bar"><i id="barFill"></i></div>
+    <p class="progress-hint" id="progressHint" aria-live="polite">Квиз откроется, когда все три памятки будут отмечены как изученные.</p>
+  </section>
+
+  <section aria-label="Памятки">
+    <div class="sec-head">
+      <span class="kicker">Шаг 1</span>
+      <h2>Изучите три памятки</h2>
+      <p class="sec-sub">Отметки независимые: любую можно поставить и снять. Три отметки открывают квиз.</p>
+    </div>
+    <div class="memo-list">
+
+      <article class="card memo" id="memo-s1">
+        <div class="memo-head">
+          <span class="sbadge" aria-hidden="true">S1</span>
+          <h3>Рабочий день</h3>
+          <label class="mark">
+            <input type="checkbox" data-mark="s1">
+            <span>Изучено</span>
+          </label>
+        </div>
+        <div class="memo-body">
+          <p>Команда «Север» начинает рабочий день в <strong>10:00</strong>. К этому времени нужно быть на рабочем месте: сразу после начала дня проходит короткая планёрка, где команда распределяет задачи на день.</p>
+        </div>
+      </article>
+
+      <article class="card memo" id="memo-s2">
+        <div class="memo-head">
+          <span class="sbadge" aria-hidden="true">S2</span>
+          <h3>Файлы</h3>
+          <label class="mark">
+            <input type="checkbox" data-mark="s2">
+            <span>Изучено</span>
+          </label>
+        </div>
+        <div class="memo-body">
+          <p>Итоговые материалы по задачам кладите в папку <strong>«Готово»</strong> — в ней команда ищет финальные версии. Черновики и промежуточные файлы оставляйте в своей рабочей папке, чтобы не путать коллег.</p>
+        </div>
+      </article>
+
+      <article class="card memo" id="memo-s3">
+        <div class="memo-head">
+          <span class="sbadge" aria-hidden="true">S3</span>
+          <h3>Вопросы</h3>
+          <label class="mark">
+            <input type="checkbox" data-mark="s3">
+            <span>Изучено</span>
+          </label>
+        </div>
+        <div class="memo-body">
+          <p>Если что-то непонятно, за помощью обращайтесь <strong>к наставнику</strong> — он отвечает за введение новичка в работу. Не решайте рабочие вопросы через случайные чаты и не привлекайте внешних подрядчиков без согласования.</p>
+        </div>
+      </article>
+
+    </div>
+  </section>
+
+  <section aria-label="Проверка регламента">
+    <div class="sec-head">
+      <span class="kicker">Шаг 2</span>
+      <h2>Проверка регламента</h2>
+      <p class="sec-sub">Три вопроса по памяткам. Ответить можно после того, как отмечены все три памятки.</p>
+    </div>
+    <div class="card quiz-card">
+
+      <div class="quiz-locked" id="quizLocked">
+        <span class="lock-ic" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </span>
+        <h3>Квиз пока закрыт</h3>
+        <p>Отметьте все три памятки как изученные — квиз откроется автоматически.</p>
+        <span class="lock-note" id="lockNote">Сейчас отмечено: 0 из 3.</span>
+      </div>
+
+      <div id="quizFormWrap" hidden>
+        <form id="quizForm" novalidate>
+
+          <fieldset class="q">
+            <legend><span class="qnum">1</span>Во сколько команда «Север» начинает рабочий день?</legend>
+            <div class="opts">
+              <label class="opt"><input type="radio" name="q1" value="9:00"><span>9:00</span></label>
+              <label class="opt"><input type="radio" name="q1" value="10:00"><span>10:00</span></label>
+              <label class="opt"><input type="radio" name="q1" value="11:00"><span>11:00</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="q">
+            <legend><span class="qnum">2</span>Куда кладут итоговые материалы?</legend>
+            <div class="opts">
+              <label class="opt"><input type="radio" name="q2" value="«Черновики»"><span>«Черновики»</span></label>
+              <label class="opt"><input type="radio" name="q2" value="«Готово»"><span>«Готово»</span></label>
+              <label class="opt"><input type="radio" name="q2" value="«Архив»"><span>«Архив»</span></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="q">
+            <legend><span class="qnum">3</span>К кому обратиться за помощью, если что-то непонятно?</legend>
+            <div class="opts">
+              <label class="opt"><input type="radio" name="q3" value="Наставник"><span>Наставник</span></label>
+              <label class="opt"><input type="radio" name="q3" value="Случайный чат"><span>Случайный чат</span></label>
+              <label class="opt"><input type="radio" name="q3" value="Внешний подрядчик"><span>Внешний подрядчик</span></label>
+            </div>
+          </fieldset>
+
+          <div class="quiz-actions">
+            <button type="submit" class="btn btn-primary" id="submitBtn" disabled>Проверить ответы</button>
+            <span class="quiz-hint" id="quizHint">Ответьте на все три вопроса.</span>
+          </div>
+          <p class="quiz-note">Повтор прохода разрешён. Результат с пояснениями из памяток появится в шаге 3.</p>
+        </form>
+      </div>
+
+    </div>
+  </section>
+
+  <section aria-label="Результат">
+    <div class="sec-head">
+      <span class="kicker">Шаг 3</span>
+      <h2>Результат</h2>
+      <p class="sec-sub">Число верных ответов из 3 и пояснения из памяток. Порог завершения — 3 из 3.</p>
+    </div>
+    <div class="card result-card" id="resultSection" hidden aria-live="polite">
+      <div class="result-top">
+        <div class="score" id="scoreEl"></div>
+        <div class="verdict">
+          <span class="badge badge-done" id="verdictBadge"></span>
+          <h3 id="verdictTitle"></h3>
+          <p id="verdictText"></p>
+        </div>
+      </div>
+      <ul class="answers" id="answersEl"></ul>
+      <div class="result-actions">
+        <button type="button" class="btn btn-primary" id="retakeBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          Пройти ещё раз
+        </button>
+        <span class="result-meta" id="resultMeta"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="card danger-card" aria-label="Сброс данных">
+    <div>
+      <h3>Сброс данных</h3>
+      <p>Прогресс и последний итог хранятся локально в этом браузере и восстанавливаются после обновления страницы. Сброс удалит отметки и итог: подтверждение вернёт состояние 0/3.</p>
+    </div>
+    <button type="button" class="btn btn-danger" id="resetBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="m19 6-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+      Сбросить данные
+    </button>
+  </section>
+
+  <footer class="foot">
+    Мини-приложение команды «Север» · учебные данные · прогресс и итог хранятся только в вашем браузере
+  </footer>
+
+</div>
+
+<div class="modal" id="resetModal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-backdrop" data-close></div>
+  <div class="modal-card">
+    <h3 id="modalTitle">Сбросить данные?</h3>
+    <p>Будут удалены все отметки памяток и последний результат квиза. Прогресс вернётся к 0/3, итог очистится. Отменить это действие после подтверждения нельзя.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-ghost" id="cancelReset">Отмена</button>
+      <button type="button" class="btn btn-danger-solid" id="confirmReset">Да, сбросить</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var KEY = 'sever-first-day-v1';
+
+  var CORRECT = { q1: '10:00', q2: '«Готово»', q3: 'Наставник' };
+  var QUESTIONS = {
+    q1: 'Во сколько команда «Север» начинает рабочий день?',
+    q2: 'Куда кладут итоговые материалы?',
+    q3: 'К кому обратиться за помощью, если что-то непонятно?'
+  };
+  var EXPLAIN = {
+    q1: 'Пояснение (памятка S1 «Рабочий день»): команда «Север» начинает рабочий день в 10:00.',
+    q2: 'Пояснение (памятка S2 «Файлы»): итоговые материалы кладут в папку «Готово».',
+    q3: 'Пояснение (памятка S3 «Вопросы»): за помощью обращаются к наставнику.'
+  };
+
+  var ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8.5 12.3 2.4 2.4 4.8-5.4"/></svg>';
+  var ICON_CROSS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m9 9 6 6"/><path d="m15 9-6 6"/></svg>';
+  var ICON_REDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>';
+
+  function defaultState() {
+    return { marks: { s1: false, s2: false, s3: false }, lastResult: null };
+  }
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      if (!raw) return defaultState();
+      var data = JSON.parse(raw);
+      var s = defaultState();
+      if (data && typeof data === 'object') {
+        if (data.marks && typeof data.marks === 'object') {
+          s.marks.s1 = !!data.marks.s1;
+          s.marks.s2 = !!data.marks.s2;
+          s.marks.s3 = !!data.marks.s3;
+        }
+        if (data.lastResult && typeof data.lastResult === 'object' && isFinite(Number(data.lastResult.score))) {
+          var sc = Number(data.lastResult.score);
+          s.lastResult = {
+            score: Math.min(3, Math.max(0, Math.round(sc))),
+            answers: (data.lastResult.answers && typeof data.lastResult.answers === 'object') ? data.lastResult.answers : {},
+            at: (typeof data.lastResult.at === 'string') ? data.lastResult.at : new Date().toISOString()
+          };
+        }
+      }
+      return s;
+    } catch (e) {
+      return defaultState();
+    }
+  }
+
+  function save() {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* приватный режим — работаем без сохранения */ }
+  }
+
+  var state = load();
+
+  /* Элементы */
+  var markInputs = Array.prototype.slice.call(document.querySelectorAll('input[data-mark]'));
+  var bar = document.getElementById('bar');
+  var barFill = document.getElementById('barFill');
+  var progressPanel = document.getElementById('progressPanel');
+  var progressText = document.getElementById('progressText');
+  var progressHint = document.getElementById('progressHint');
+  var chipProgress = document.getElementById('chipProgress');
+  var chipDone = document.getElementById('chipDone');
+  var quizLocked = document.getElementById('quizLocked');
+  var quizFormWrap = document.getElementById('quizFormWrap');
+  var lockNote = document.getElementById('lockNote');
+  var form = document.getElementById('quizForm');
+  var submitBtn = document.getElementById('submitBtn');
+  var quizHint = document.getElementById('quizHint');
+  var resultSection = document.getElementById('resultSection');
+  var scoreEl = document.getElementById('scoreEl');
+  var verdictBadge = document.getElementById('verdictBadge');
+  var verdictTitle = document.getElementById('verdictTitle');
+  var verdictText = document.getElementById('verdictText');
+  var answersEl = document.getElementById('answersEl');
+  var retakeBtn = document.getElementById('retakeBtn');
+  var resultMeta = document.getElementById('resultMeta');
+  var resetBtn = document.getElementById('resetBtn');
+  var modal = document.getElementById('resetModal');
+  var cancelReset = document.getElementById('cancelReset');
+  var confirmReset = document.getElementById('confirmReset');
+
+  function marksCount() {
+    var n = 0;
+    ['s1', 's2', 's3'].forEach(function (k) { if (state.marks[k]) n++; });
+    return n;
+  }
+
+  function currentAnswers() {
+    function val(name) {
+      var el = form.querySelector('input[name="' + name + '"]:checked');
+      return el ? el.value : null;
+    }
+    return { q1: val('q1'), q2: val('q2'), q3: val('q3') };
+  }
+
+  function allAnswered(a) { return !!(a.q1 && a.q2 && a.q3); }
+
+  function refreshPicked() {
+    ['q1', 'q2', 'q3'].forEach(function (name) {
+      var radios = form.querySelectorAll('input[name="' + name + '"]');
+      Array.prototype.forEach.call(radios, function (r) {
+        var opt = r.closest('.opt');
+        if (opt) opt.classList.toggle('picked', r.checked);
+      });
+    });
+  }
+
+  function updateSubmit() {
+    var ready = allAnswered(currentAnswers());
+    submitBtn.disabled = !ready;
+    quizHint.textContent = ready
+      ? 'Все ответы выбраны — можно проверять.'
+      : 'Ответьте на все три вопроса.';
+  }
+
+  function formatWhen(iso) {
+    try {
+      var d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      return d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return ''; }
+  }
+
+  function answerRow(q, given) {
+    var ok = given !== null && given === CORRECT[q];
+    var li = document.createElement('li');
+    li.className = 'answer ' + (ok ? 'ok' : 'no');
+
+    var icon = document.createElement('span');
+    icon.className = 'a-icon';
+    icon.innerHTML = ok ? ICON_CHECK : ICON_CROSS;
+
+    var body = document.createElement('div');
+    var p1 = document.createElement('p');
+    p1.className = 'a-q';
+    p1.textContent = QUESTIONS[q];
+    var p2 = document.createElement('p');
+    p2.className = 'a-given';
+    p2.textContent = 'Ваш ответ: ' + (given || '—') + (ok ? ' · верно' : ' · неверно');
+    var p3 = document.createElement('p');
+    p3.className = 'a-expl';
+    p3.textContent = EXPLAIN[q];
+    body.appendChild(p1); body.appendChild(p2); body.appendChild(p3);
+
+    li.appendChild(icon); li.appendChild(body);
+    return li;
+  }
+
+  function renderResult() {
+    var r = state.lastResult;
+    resultSection.hidden = !r;
+    if (!r) return;
+
+    var done = r.score === 3;
+    scoreEl.innerHTML = String(r.score) + '<span class="den">/3</span>';
+    scoreEl.classList.toggle('good', done);
+
+    verdictBadge.className = 'badge ' + (done ? 'badge-done' : 'badge-retry');
+    verdictBadge.innerHTML = (done
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 13 4 4 10-11"/></svg>'
+      : ICON_REDO) + '<span>' + (done ? 'Завершено' : 'Нужен повтор') + '</span>';
+
+    verdictTitle.textContent = done ? 'Регламент усвоен' : 'Порог завершения не пройден';
+    verdictText.textContent = done
+      ? 'Все три ответа верные, порог завершения (3 из 3) пройден. Вводный маршрут новичка завершён.'
+      : 'Порог завершения — 3 из 3. Посмотрите пояснения ниже, перечитайте памятки и пройдите квиз ещё раз — повтор разрешён.';
+
+    answersEl.innerHTML = '';
+    ['q1', 'q2', 'q3'].forEach(function (q) {
+      var given = (r.answers && typeof r.answers[q] === 'string') ? r.answers[q] : null;
+      answersEl.appendChild(answerRow(q, given));
+    });
+
+    var when = formatWhen(r.at);
+    resultMeta.textContent = when ? ('Последняя попытка: ' + when) : '';
+  }
+
+  function render() {
+    var count = marksCount();
+
+    markInputs.forEach(function (inp) {
+      var id = inp.getAttribute('data-mark');
+      inp.checked = !!state.marks[id];
+      var card = inp.closest('.memo');
+      if (card) card.classList.toggle('done', !!state.marks[id]);
+    });
+
+    barFill.style.width = (count / 3 * 100) + '%';
+    bar.classList.toggle('full', count === 3);
+    progressText.textContent = 'Отмечено памяток: ' + count + ' из 3';
+    progressHint.textContent = count === 3
+      ? 'Все памятки изучены — квиз открыт. Ответьте на три вопроса ниже.'
+      : 'Квиз откроется, когда все три памятки будут отмечены как изученные.';
+
+    chipProgress.textContent = 'Прогресс: ' + count + '/3';
+    chipProgress.classList.toggle('ok', count === 3);
+    chipDone.hidden = !(state.lastResult && state.lastResult.score === 3);
+
+    quizLocked.hidden = count === 3;
+    quizFormWrap.hidden = count !== 3;
+    lockNote.textContent = 'Сейчас отмечено: ' + count + ' из 3.';
+
+    updateSubmit();
+    renderResult();
+  }
+
+  /* Отметки памяток */
+  markInputs.forEach(function (inp) {
+    inp.addEventListener('change', function () {
+      state.marks[inp.getAttribute('data-mark')] = inp.checked;
+      save();
+      render();
+    });
+  });
+
+  /* Выбор ответов */
+  form.addEventListener('change', function (e) {
+    if (e.target && e.target.type === 'radio') refreshPicked();
+    updateSubmit();
+  });
+
+  /* Проверка квиза */
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (marksCount() < 3) return;
+    var a = currentAnswers();
+    if (!allAnswered(a)) return;
+    var score = 0;
+    ['q1', 'q2', 'q3'].forEach(function (q) { if (a[q] === CORRECT[q]) score++; });
+    state.lastResult = { score: score, answers: a, at: new Date().toISOString() };
+    save();
+    render();
+    resultSection.scrollIntoView({ block: 'start' });
+  });
+
+  /* Повтор */
+  retakeBtn.addEventListener('click', function () {
+    form.reset();
+    refreshPicked();
+    updateSubmit();
+    quizFormWrap.scrollIntoView({ block: 'start' });
+  });
+
+  /* Сброс с подтверждением */
+  function openModal() { modal.hidden = false; cancelReset.focus(); }
+  function closeModal() { modal.hidden = true; resetBtn.focus(); }
+
+  resetBtn.addEventListener('click', openModal);
+  cancelReset.addEventListener('click', closeModal);
+  modal.addEventListener('click', function (e) {
+    if (e.target && e.target.hasAttribute('data-close')) closeModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.hidden) closeModal();
+  });
+
+  confirmReset.addEventListener('click', function () {
+    try { localStorage.removeItem(KEY); } catch (err) { /* ничего */ }
+    state = defaultState();
+    form.reset();
+    refreshPicked();
+    modal.hidden = true;
+    render();
+    window.scrollTo(0, 0);
+    progressPanel.focus();
+  });
+
+  /* Инициализация */
+  refreshPicked();
+  updateSubmit();
+  render();
+})();
+</script>
+</body>
+</html>
